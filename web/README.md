@@ -71,6 +71,70 @@ second time and nothing breaks.
 of a page number keeps deep pages fast and stable while rows are being added.
 `POST` validates the JSON body and returns 201, or 400 with the field errors.
 
+## Presenting it, file by file
+
+About 6 minutes. For each step: open the file, say the point, show the evidence.
+Start the app first (see Run), then keep a browser tab on `http://localhost:3000`.
+
+### 1. `prisma/schema.prisma` (1 minute)
+- **Open:** the `datasource` block, then the `Ticket` model.
+- **Point:** the schema is the single source of truth. `url` is the runtime connection
+  through PgBouncer (`?pgbouncer=true`, no prepared statements); `directUrl` is used only
+  by the Prisma CLI for migrations, which need session features the pooler breaks. The
+  composite index `(status, createdAt DESC)` serves the list query (filter plus order),
+  and `ownerId` is indexed by hand because PostgreSQL does not index foreign keys.
+- **Show:** `prisma/migrations/*/migration.sql` contains the matching `CREATE INDEX`
+  statements: the schema turned into plain, reviewable SQL.
+
+### 2. `lib/prisma.ts` (30 seconds)
+- **Point:** one `PrismaClient` per process, kept on `globalThis`. In development Next.js
+  reloads modules on every change; without the guard each reload opens a new connection
+  pool until the database refuses connections. Each client owns a pool, so more clients
+  means more connections through PgBouncer.
+
+### 3. `lib/validation.ts` and the tests (1 minute)
+- **Point:** one Zod schema is shared by the form and the API, so the rules cannot drift
+  apart. `z.coerce` turns query-string text into numbers, and `limit` is capped at 100.
+- **Show:** `npm test` prints 7 passing tests (no database needed).
+
+### 4. `app/page.tsx` and `app/tickets/[id]/page.tsx` (1 minute)
+- **Point:** Server Components. They run on the server, query with Prisma and send HTML;
+  the list page needs no client component. `select` fetches only the columns the page
+  renders (not the long `body`). `force-dynamic` renders on every request so a new ticket
+  appears immediately; the alternative is caching plus `revalidatePath`. In Next.js 15
+  `params` is a Promise, and a bad id goes to `notFound()`.
+- **Show:** open `/`, then `/tickets/999` (404).
+
+### 5. `app/actions.ts` and `app/tickets/new/form.tsx` (1.5 minutes)
+- **Point:** a Server Action is a function a `<form>` calls directly, and under the hood a
+  public HTTP endpoint. `createTicket` validates, inserts, calls `revalidatePath("/")` and
+  redirects. `closeTicket` uses `updateMany` with `status: { not: "CLOSED" }`, so a double
+  click changes zero rows the second time. The form is the only Client Component, because
+  `useActionState` needs state to show the validation error.
+- **Show:** in the browser, submit a 2-character title (the error appears), then a valid
+  one (redirect to the new ticket), then press Close (status becomes CLOSED).
+- **Say openly:** `closeTicket` does not check who is calling (see Known gaps).
+
+### 6. `app/api/tickets/route.ts` (1 minute)
+- **Point:** cursor pagination: `WHERE id < cursor ORDER BY id DESC LIMIT n+1`. Reading one
+  extra row tells whether there is a next page without a `COUNT(*)`. Stays fast on deep
+  pages and does not skip rows while data changes; it cannot jump to "page 7".
+- **Show:**
+
+```bash
+curl "localhost:3000/api/tickets?limit=2"                  # items + nextCursor
+curl "localhost:3000/api/tickets?limit=2&cursor=3"         # next page
+curl "localhost:3000/api/tickets?status=DONE"              # 400 with a field error
+curl -X POST localhost:3000/api/tickets -H 'content-type: application/json'      -d '{"title":""}'                                     # 400 with field errors
+curl -X POST localhost:3000/api/tickets -H 'content-type: application/json'      -d '{"title":"Printer down","body":"Error E42"}'      # 201
+```
+
+### 7. Close with the gaps (30 seconds)
+State them before being asked: no authentication (`lib/session.ts` is a placeholder), no
+authorization in `closeTicket` and `GET /api/tickets`, Row Level Security not wired in, and
+the cursor query orders by `id` while the index is on `(status, createdAt)`. Each has a
+known fix, listed under Known gaps.
+
 ## Concepts, short version
 
 - **Server Component vs Client Component.** Server Components run only on the server,

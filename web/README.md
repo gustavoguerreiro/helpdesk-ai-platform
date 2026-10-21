@@ -113,8 +113,11 @@ and use 5433 in `DATABASE_DIRECT_URL`.
 returned 400 for invalid input and 201 for a valid ticket. CI runs the same steps
 (except the database ones) on every push.
 
-**Not verified:** the Server Action forms in a real browser, and the behavior under
-load or with many connections.
+**Verified in a browser (built app, 2026-10-21):** the new-ticket form shows the Zod
+error for a 2-character title, creates a ticket and redirects to its page, and the
+Close button changes the status to CLOSED.
+
+**Not verified:** behavior under load or with many connections.
 
 ## Known gaps (this is a demo, not production)
 
@@ -131,6 +134,9 @@ load or with many connections.
 - **Index and query do not match.** The index is `(status, createdAt DESC)`, but the
   API orders by `id`. The list page matches the index; the cursor query may not use
   it well on a large table. Not checked with `EXPLAIN` here because the table is tiny.
+- **The form loses what you typed after a validation error.** React 19 resets
+  uncontrolled forms after an action finishes, so title and body are empty again.
+  Fix: return the submitted values in the action state and use them as `defaultValue`.
 - **Dependencies.** `npm audit` reports vulnerabilities (not reviewed).
 - **UI.** Inline styles only; no Tailwind or component library.
 

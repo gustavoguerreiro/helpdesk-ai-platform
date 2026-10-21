@@ -24,11 +24,3 @@ two files. Say what the problem is before showing the code.
 
 ## 5. `infra/` and CI
 - Bicep Key Vault + Log Analytics as an example of the pattern; CI runs tests, Prisma generate/build and `az bicep build`.
-
-## If they ask about tools I have not used in production
-Be direct: "I haven't used Prisma/Bicep/Azure in production. The closest I've done is SQLAlchemy and AWS, and this project is how I learned the equivalents. Here is what I verified and what I didn't."
-
-## Questions to ask them
-- How do you run migrations today, and what happens when one fails halfway?
-- Which parts hurt most in the current infra (observability, cost, deploys)?
-- How do you evaluate agent behavior before shipping changes?

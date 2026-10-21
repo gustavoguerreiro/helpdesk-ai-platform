@@ -1,0 +1,56 @@
+// Prisma schema: the single source of truth for the data model.
+// `prisma migrate dev` turns changes here into SQL migration files (prisma/migrations),
+// which are committed and applied in order by `prisma migrate deploy` in CI/production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Runtime connection. In this project it points at PgBouncer (port 6432) and
+  // carries ?pgbouncer=true so Prisma avoids prepared statements, which do not
+  // work with PgBouncer's transaction pooling mode.
+  url = env("DATABASE_URL")
+  // Direct connection (port 5432) used ONLY by the Prisma CLI for migrations.
+  // Migrations use session features (locks, DDL transactions) that a transaction
+  // pooler can break, so they must bypass PgBouncer.
+  directUrl = env("DATABASE_DIRECT_URL")
+}
+
+enum Role {
+  CUSTOMER
+  AGENT
+  ADMIN
+}
+
+enum Status {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+model User {
+  id      Int      @id @default(autoincrement())
+  email   String   @unique
+  name    String
+  role    Role     @default(CUSTOMER)
+  tickets Ticket[]
+}
+
+model Ticket {
+  id        Int      @id @default(autoincrement())
+  title     String
+  body      String
+  status    Status   @default(OPEN)
+  createdAt DateTime @default(now())
+  owner     User     @relation(fields: [ownerId], references: [id])
+  ownerId   Int
+
+  // Typical list query: "tickets with status X, newest first".
+  // A composite index serves both the filter and the ordering.
+  @@index([status, createdAt(sort: Desc)])
+  // Foreign keys are NOT indexed automatically in PostgreSQL; this one speeds up
+  // "tickets of this user" and joins.
+  @@index([ownerId])
+}

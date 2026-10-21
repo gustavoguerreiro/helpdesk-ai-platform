@@ -44,7 +44,7 @@ non-obvious step is commented in English. Each folder has its own README with:
 ## Status
 
 - [x] Repository base and local environment
-- [ ] `web/`
+- [x] `web/` (Prisma parts not run locally, see its README)
 - [x] `db-lab/`
 - [x] `sync/`
 - [x] `agent/`

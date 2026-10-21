@@ -46,7 +46,7 @@ non-obvious step is commented in English. Each folder has its own README with:
 - [x] Repository base and local environment
 - [ ] `web/`
 - [x] `db-lab/`
-- [ ] `sync/`
+- [x] `sync/`
 - [ ] `agent/`
 - [ ] `infra/` and CI
 - [ ] Final walkthrough notes

@@ -1,0 +1,52 @@
+# Local development stack: PostgreSQL 16 behind PgBouncer.
+#
+# Why PgBouncer? Many app connections are expensive for Postgres. The pooler
+# multiplexes many client connections onto a few server connections.
+# We use POOL_MODE=transaction (the most common mode), which means session-level
+# features (prepared statements, SET, session advisory locks) do not behave as
+# usual. See web/README.md for how Prisma is configured for this.
+#
+# Ports:
+#   5432 -> PostgreSQL directly (used for migrations and the SQL lab)
+#   6432 -> PgBouncer (used by the application at runtime)
+services:
+  postgres:
+    image: postgres:16
+    container_name: helpdesk-postgres
+    environment:
+      POSTGRES_USER: helpdesk
+      POSTGRES_PASSWORD: helpdesk_dev_password   # local development only
+      POSTGRES_DB: helpdesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Scripts in this folder run once, when the database is first created.
+      - ./db-lab/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk -d helpdesk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: helpdesk-pgbouncer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: helpdesk
+      DB_PASSWORD: helpdesk_dev_password
+      DB_NAME: helpdesk
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "10"
+    ports:
+      - "6432:5432"
+
+volumes:
+  pgdata:

@@ -47,6 +47,6 @@ non-obvious step is commented in English. Each folder has its own README with:
 - [ ] `web/`
 - [x] `db-lab/`
 - [x] `sync/`
-- [ ] `agent/`
+- [x] `agent/`
 - [ ] `infra/` and CI
 - [ ] Final walkthrough notes

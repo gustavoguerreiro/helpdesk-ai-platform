@@ -14,19 +14,29 @@ CREATE TABLE IF NOT EXISTS tickets (
   body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open'
 );
 -- Actions the agent wants to run but a human must approve first.
--- idem_key makes "the model asked for the same thing twice" collapse into ONE row.
 CREATE TABLE IF NOT EXISTS pending_actions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  idem_key TEXT NOT NULL UNIQUE,
+  idem_key TEXT NOT NULL,
   requested_by TEXT NOT NULL, tool TEXT NOT NULL, args TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
   decided_by TEXT, result TEXT
 );
--- One row per tool call: who, what, allowed or not, how long, how many tokens.
+-- idem_key makes "the model asked for the same thing twice" collapse into ONE row,
+-- but only while that row is still pending. After a human decides, the same request
+-- may be queued again (for example after a rejection, once the situation changed).
+CREATE UNIQUE INDEX IF NOT EXISTS pending_actions_one_pending
+  ON pending_actions (idem_key) WHERE status = 'pending';
+-- One row per tool call: who, what, allowed or not, how long it took.
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user TEXT, tool TEXT, args TEXT, outcome TEXT, latency_ms REAL,
-  input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0
+  user TEXT, tool TEXT, args TEXT, outcome TEXT, latency_ms REAL
+);
+-- One row per MODEL reply: this is where cost is tracked. Tokens belong to the model
+-- call, not to a tool call, because one reply can request several tools and the last
+-- reply (the final answer) requests none.
+CREATE TABLE IF NOT EXISTS model_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user TEXT, step INTEGER, input_tokens INTEGER, output_tokens INTEGER, latency_ms REAL
 );
 """
 
@@ -39,7 +49,7 @@ def connect(path: str = ":memory:") -> sqlite3.Connection:
 
 
 def seed_demo(conn: sqlite3.Connection) -> None:
-    """Three tickets: two belong to ana, one to bruno-customer 'dora'."""
+    """Three tickets: two belong to ana, one to dora (its body is a prompt-injection sample)."""
     conn.executemany(
         "INSERT OR IGNORE INTO tickets (id, owner, title, body) VALUES (?,?,?,?)",
         [

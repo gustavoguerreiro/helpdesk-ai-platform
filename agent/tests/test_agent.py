@@ -108,8 +108,27 @@ def test_injection_text_in_ticket_is_only_data(conn):
     assert "untrusted" in __import__("app.agent", fromlist=["x"]).SYSTEM_PROMPT
 
 
-def test_tokens_are_logged(conn):
-    model = ScriptedModel([ModelReply(tool_calls=[ToolCall("t", "get_ticket", {"ticket_id": 1})], input_tokens=120, output_tokens=15), ModelReply(text="x")])
+def test_tokens_are_logged_once_per_model_reply(conn):
+    # One reply asks for two tools, then a final text reply. Every reply is counted
+    # exactly once: the tool calls must not repeat their reply's tokens.
+    model = ScriptedModel([
+        ModelReply(tool_calls=[ToolCall("a", "get_ticket", {"ticket_id": 1}), ToolCall("b", "get_ticket", {"ticket_id": 2})],
+                   input_tokens=100, output_tokens=10),
+        ModelReply(text="done", input_tokens=500, output_tokens=40),
+    ])
     run_agent(conn, USERS["ana"], "q", model)
-    row = conn.execute("SELECT input_tokens, output_tokens FROM audit_log").fetchone()
-    assert (row[0], row[1]) == (120, 15)
+    rows = [tuple(r) for r in conn.execute("SELECT step, input_tokens, output_tokens FROM model_usage ORDER BY step")]
+    assert rows == [(1, 100, 10), (2, 500, 40)]
+    assert conn.execute("SELECT count(*) FROM audit_log").fetchone()[0] == 2  # two tool calls
+
+
+def test_a_rejected_request_can_be_queued_again(conn):
+    def request():
+        model = ScriptedModel([call("close_ticket", ticket_id=1, reason="resolved"), ModelReply(text="x")])
+        run_agent(conn, USERS["bruno"], "close ticket 1", model)
+
+    request()
+    assert approve_action(conn, USERS["carla"], 1, approve=False)["status"] == "rejected"
+    request()  # same user, tool and arguments as the rejected one
+    statuses = [r[0] for r in conn.execute("SELECT status FROM pending_actions ORDER BY id")]
+    assert statuses == ["rejected", "pending"]

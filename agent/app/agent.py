@@ -9,7 +9,8 @@ Safety layers, in the order a tool call passes through them:
   3. does the USER's role allow this tool?  -> RBAC (never the model's decision)
   4. needs human approval?    -> saved as a pending action, NOT executed
   5. otherwise execute        -> with data-level scoping inside the handler
-Every call is written to the audit log, allowed or not.
+Every call is written to the audit log, allowed or not. Every model reply is written to
+model_usage (tokens and latency), which is what cost tracking reads.
 """
 from __future__ import annotations
 
@@ -40,11 +41,19 @@ class AgentResult:
     stopped_by_limit: bool = False
 
 
-def _audit(conn, user: User, call: ToolCall, outcome: str, started: float, in_tok=0, out_tok=0) -> None:
+def _audit(conn, user: User, call: ToolCall, outcome: str, started: float) -> None:
     conn.execute(
-        "INSERT INTO audit_log (user, tool, args, outcome, latency_ms, input_tokens, output_tokens) "
-        "VALUES (?,?,?,?,?,?,?)",
-        (user.name, call.name, dumps(call.args), outcome, (time.perf_counter() - started) * 1000, in_tok, out_tok),
+        "INSERT INTO audit_log (user, tool, args, outcome, latency_ms) VALUES (?,?,?,?,?)",
+        (user.name, call.name, dumps(call.args), outcome, (time.perf_counter() - started) * 1000),
+    )
+    conn.commit()
+
+
+def _record_usage(conn, user: User, step: int, reply, started: float) -> None:
+    """Cost tracking: tokens and latency of ONE model reply, whether or not it called tools."""
+    conn.execute(
+        "INSERT INTO model_usage (user, step, input_tokens, output_tokens, latency_ms) VALUES (?,?,?,?,?)",
+        (user.name, step, reply.input_tokens, reply.output_tokens, (time.perf_counter() - started) * 1000),
     )
     conn.commit()
 
@@ -58,31 +67,33 @@ def queue_for_approval(conn: sqlite3.Connection, user: User, call: ToolCall) -> 
         (key, user.name, call.name, dumps(call.args)),
     )
     conn.commit()
-    return conn.execute("SELECT id FROM pending_actions WHERE idem_key = ?", (key,)).fetchone()["id"]
+    return conn.execute(
+        "SELECT id FROM pending_actions WHERE idem_key = ? AND status = 'pending'", (key,)
+    ).fetchone()["id"]
 
 
-def execute_tool_call(conn: sqlite3.Connection, user: User, call: ToolCall, in_tok=0, out_tok=0) -> dict:
+def execute_tool_call(conn: sqlite3.Connection, user: User, call: ToolCall) -> dict:
     """Run one tool call through all the safety layers and return a result dict."""
     started = time.perf_counter()
     tool = TOOLS.get(call.name)
     if tool is None:                                                   # layer 1
-        _audit(conn, user, call, "unknown_tool", started, in_tok, out_tok)
+        _audit(conn, user, call, "unknown_tool", started)
         return {"error": f"unknown tool {call.name}"}
     try:                                                               # layer 2
         args = tool.args_model(**call.args)
     except ValidationError as e:
-        _audit(conn, user, call, "invalid_args", started, in_tok, out_tok)
+        _audit(conn, user, call, "invalid_args", started)
         return {"error": f"invalid arguments: {e.errors(include_url=False)[0]['msg']}"}
     if user.role not in tool.allowed_roles:                            # layer 3
-        _audit(conn, user, call, "forbidden", started, in_tok, out_tok)
+        _audit(conn, user, call, "forbidden", started)
         return {"error": f"role '{user.role}' is not allowed to use {tool.name}"}
     if tool.requires_approval:                                         # layer 4
         action_id = queue_for_approval(conn, user, call)
-        _audit(conn, user, call, "pending_approval", started, in_tok, out_tok)
+        _audit(conn, user, call, "pending_approval", started)
         return {"status": "pending_approval", "action_id": action_id,
                 "note": "A human must approve this before it runs."}
     result = tool.handler(conn, user, args)                            # layer 5
-    _audit(conn, user, call, "ok", started, in_tok, out_tok)
+    _audit(conn, user, call, "ok", started)
     return result
 
 
@@ -93,7 +104,9 @@ def run_agent(conn: sqlite3.Connection, user: User, question: str, model: Model,
     # (We still re-check on every call, because advertising is not enforcement.)
 
     for step in range(1, max_steps + 1):
+        started = time.perf_counter()
         reply = model.respond(SYSTEM_PROMPT, messages, tool_schemas)
+        _record_usage(conn, user, step, reply, started)
         if not reply.tool_calls:
             return AgentResult(answer=reply.text, steps=step)
 
@@ -104,7 +117,7 @@ def run_agent(conn: sqlite3.Connection, user: User, question: str, model: Model,
         ]})
         results = []
         for call in reply.tool_calls:
-            out = execute_tool_call(conn, user, call, reply.input_tokens, reply.output_tokens)
+            out = execute_tool_call(conn, user, call)
             results.append({"type": "tool_result", "tool_use_id": call.id, "content": json.dumps(out)})
         messages.append({"role": "user", "content": results})
 

@@ -1,0 +1,62 @@
+# Continuous integration: every push and pull request runs the tests.
+# Each job is independent, so a failure points to one area.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      # A real PostgreSQL for the sync tests.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lab
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r sync/requirements.txt -r agent/requirements.txt
+      - run: pytest sync agent -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      # Dummy values: build and typecheck do not connect to a database.
+      DATABASE_URL: postgresql://u:p@localhost:6432/h?pgbouncer=true
+      DATABASE_DIRECT_URL: postgresql://u:p@localhost:5432/h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  bicep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The Azure CLI is preinstalled on GitHub-hosted Ubuntu runners.
+      - run: az bicep build --file infra/main.bicep --stdout > /dev/null

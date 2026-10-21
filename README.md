@@ -48,5 +48,16 @@ non-obvious step is commented in English. Each folder has its own README with:
 - [x] `db-lab/`
 - [x] `sync/`
 - [x] `agent/`
-- [ ] `infra/` and CI
-- [ ] Final walkthrough notes
+- [x] `infra/` and CI (Bicep not compiled locally; CI does it)
+- [x] Final walkthrough notes ([docs/walkthrough.md](docs/walkthrough.md))
+
+## Verification summary (what was actually run)
+
+| Area | Result |
+|---|---|
+| `db-lab/` | All SQL scripts ran on PostgreSQL 16.15 |
+| `sync/` | 7 tests passed against PostgreSQL 16 |
+| `agent/` | 13 tests passed (fake model); real-model adapter not run |
+| `web/` | 7 validation tests passed; Prisma generate/migrate and `next build` not run (sandbox blocked Prisma engine download) |
+| `infra/` | Not compiled locally; CI runs `az bicep build` |
+| `docker-compose.yml` | Not run (no Docker daemon used) |

@@ -50,16 +50,17 @@ non-obvious step is commented in English. Each folder has its own README with:
 - [x] `db-lab/`
 - [x] `sync/`
 - [x] `agent/`
-- [x] `infra/` and CI (Bicep not compiled locally; CI does it)
+- [x] `infra/` and CI (Bicep compiles; never deployed)
 - [x] Final walkthrough notes ([docs/walkthrough.md](docs/walkthrough.md))
 
-## Verification summary (what was actually run)
+## Verification summary (what was actually run, 2026-10-21)
 
 | Area | Result |
 |---|---|
-| `db-lab/` | All SQL scripts ran on PostgreSQL 16.15 |
-| `sync/` | 7 tests passed against PostgreSQL 16 |
-| `agent/` | 14 tests passed (fake model); real-model adapter not run |
-| `web/` | 7 validation tests passed; Prisma generate/migrate and `next build` not run (sandbox blocked Prisma engine download) |
-| `infra/` | Not compiled locally; CI runs `az bicep build` |
-| `docker-compose.yml` | Not run (no Docker daemon used) |
+| `db-lab/` | Scripts 01 to 07 and the role script ran on PostgreSQL 16 (the compose container) |
+| `sync/` | 7 tests passed against PostgreSQL 16; demo run against the compose database; also run in CI |
+| `agent/` | 14 tests passed (fake model); the real-model adapter was never run |
+| `web/` | `prisma migrate`, seed, typecheck, 7 tests, `next build`, the running app through PgBouncer and the forms in a browser; no authentication or authorization yet (see its README) |
+| `infra/` | `az bicep build` succeeds (also in CI); nothing was deployed to Azure |
+| `docker-compose.yml` | PostgreSQL 16 and PgBouncer (transaction mode) run; `pg_stat_statements` preloaded |
+| CI | `python`, `web` and `bicep` jobs pass on GitHub Actions |

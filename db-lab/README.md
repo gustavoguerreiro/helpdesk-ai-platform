@@ -26,8 +26,14 @@ Tested: every script ran without errors on PostgreSQL 16.15 (a local server with
 `pg_stat_statements` preloaded). The timings above come from that run on a small
 machine; yours will differ, the shape of the change is what matters.
 
-Not tested here: the Docker Compose stack and the `init/` role script running
-inside the container's first-start hook (the script itself was run manually).
+Compose stack: verified on 2026-10-21. Scripts 01 to 07 all run against the
+`postgres:16` container from `docker-compose.yml`, with `pg_stat_statements` preloaded
+through the `command:` line (without it, script 05 fails). The `init/` role script
+ran in the container's first-start hook (`app_user` and `report_reader` exist,
+neither is superuser nor bypasses RLS).
+
+Not tested here: PgBouncer with `SET LOCAL` end to end (script 07 was run over a
+direct connection).
 
 ## Trade-offs worth saying out loud
 

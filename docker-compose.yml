@@ -13,6 +13,8 @@ services:
   postgres:
     image: postgres:16
     container_name: helpdesk-postgres
+    # pg_stat_statements must be preloaded at server start (db-lab/05 needs it).
+    command: postgres -c shared_preload_libraries=pg_stat_statements
     environment:
       POSTGRES_USER: helpdesk
       POSTGRES_PASSWORD: helpdesk_dev_password   # local development only

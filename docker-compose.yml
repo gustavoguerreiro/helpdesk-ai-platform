@@ -18,7 +18,7 @@ services:
       POSTGRES_PASSWORD: helpdesk_dev_password   # local development only
       POSTGRES_DB: helpdesk
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Scripts in this folder run once, when the database is first created.
@@ -46,7 +46,7 @@ services:
       MAX_CLIENT_CONN: "200"
       DEFAULT_POOL_SIZE: "10"
     ports:
-      - "6432:5432"
+      - "${PGBOUNCER_PORT:-6432}:5432"
 
 volumes:
   pgdata:

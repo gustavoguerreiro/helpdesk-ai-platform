@@ -26,6 +26,8 @@ human approval, and infrastructure-as-code basics.
 ```bash
 cp .env.example .env
 docker compose up -d        # PostgreSQL on :5432, PgBouncer on :6432
+# Port 5432 already taken? POSTGRES_PORT=5433 docker compose up -d
+#   (then use :5433 in DATABASE_DIRECT_URL and TEST_DATABASE_URL)
 ```
 
 PostgreSQL is exposed directly on port 5432 (used for migrations and the SQL lab).
@@ -44,7 +46,7 @@ non-obvious step is commented in English. Each folder has its own README with:
 ## Status
 
 - [x] Repository base and local environment
-- [x] `web/` (Prisma parts not run locally, see its README)
+- [x] `web/` (migrate, seed, typecheck, tests, build and the running app were verified, see its README)
 - [x] `db-lab/`
 - [x] `sync/`
 - [x] `agent/`

@@ -21,7 +21,7 @@ a Server Action behind a form, and a connection setup that works with PgBouncer.
 
 ```bash
 cp ../.env.example .env && (cd .. && docker compose up -d)
-npm install
+npm ci
 npx prisma migrate dev --name init   # creates prisma/migrations and applies it (uses the DIRECT url)
 npm run db:seed
 npm run dev                          # http://localhost:3000
@@ -38,9 +38,9 @@ npm test                             # validation tests (no database needed)
 
 Tested here: the Zod validation (7 vitest tests).
 
-Type-checked here: `tsc` passes except one implicit-any that disappears once the Prisma client is generated.
+**Verified (2026-10-21, Node 22 in a container, PostgreSQL 16 + PgBouncer from `docker-compose.yml`):** `prisma validate`, `prisma generate`, `prisma migrate dev --name init` (the result is committed in `prisma/migrations`), `npm run db:seed`, `npm run typecheck`, `npm test` (7 tests), `npm run build`, and `next start` against PgBouncer in transaction mode (`GET /`, `GET` and `POST /api/tickets`, including a 400 on invalid input and a 201 on a valid ticket).
 
-**Not run in this environment:** `prisma generate`, `prisma migrate`, `next build`, and the app against a database. The sandbox I built this in blocks the download of Prisma's engine binaries, so I could not generate the client. The code follows the documented Prisma 6 and Next.js 15 APIs, and CI (`.github/workflows/ci.yml`) runs generate + typecheck + build, but run `npx prisma migrate dev --name init && npm run build` once locally before relying on it, and commit the generated `prisma/migrations` folder.
+**Still not verified:** the Server Action form in a real browser, and any auth flow (there is none).
 
 Also only an example: `lib/session.ts` picks a demo user. Real authentication (Auth.js, or Entra ID / Easy Auth on Azure) is not implemented.
 

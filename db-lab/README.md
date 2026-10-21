@@ -112,5 +112,4 @@ refresh job for the materialized view, and any of this at production data volume
 
 I use PostgreSQL in production, but I have not used Row Level Security in
 production. This lab is how I learned it, and it shows what I can demonstrate, not
-a claim of production experience. Edit this paragraph to list anything else that is
-new to you (for example partitioning a live table or tuning PgBouncer).
+a claim of production experience.
